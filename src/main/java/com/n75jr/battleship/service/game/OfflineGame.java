@@ -10,16 +10,18 @@ import com.n75jr.battleship.domain.PointShipBoardState;
 import com.n75jr.battleship.service.BotMessageService;
 import com.n75jr.battleship.service.PlayOfflineService;
 import com.n75jr.battleship.service.UserGameService;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.context.MessageSource;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 
 public class OfflineGame extends Game implements Runnable {
@@ -204,13 +206,40 @@ public class OfflineGame extends Game implements Runnable {
         gameData.player1.shots++;
     }
 
-    private void shotByBot(Board.Point pointBotHit,
-                           List<BotDirectionShot> deltaList) {
-        gameData.player1.dataUser.setBotState(BotState.PLAY_OFFLINE_GAME_ENEMY_MOVE);
-        int y;
-        int x;
+    private static class BotMove {
 
-        if (pointBotHit == null) {
+        @Getter @Setter
+        Board.Point pointBotHit;
+        ShotDirection LEFT = new ShotDirection();
+        ShotDirection UP = new ShotDirection();
+        ShotDirection RIGHT = new ShotDirection();
+        ShotDirection DOWN = new ShotDirection();
+        List<ShotDirection> SHOT_DIRECTIONS = new ArrayList<>(List.of(LEFT, UP, RIGHT, DOWN));
+
+        void reset() {
+            SHOT_DIRECTIONS = new ArrayList<>(List.of(LEFT, UP, RIGHT, DOWN));
+            LEFT.x = -1;
+            UP.y = -1;
+            RIGHT.x = 1;
+            DOWN.y = 1;
+        }
+
+        ShotDirection getRandom() {
+            return SHOT_DIRECTIONS.get(ThreadLocalRandom.current().nextInt(SHOT_DIRECTIONS.size()));
+        }
+
+        static class ShotDirection {
+            short x;
+            short y;
+        }
+    }
+
+    private void shotByBot(final BotMove botMove) {
+        gameData.player1.dataUser.setBotState(BotState.PLAY_OFFLINE_GAME_ENEMY_MOVE);
+        int x;
+        int y;
+
+        if (botMove.pointBotHit == null) {
             var pointsArr = Arrays.stream(gameData.player1.board.getPoints())
                     .flatMap(Arrays::stream)
                     .filter(p -> p.getPointShipBoardState() == PointShipBoardState.INIT
@@ -229,34 +258,23 @@ public class OfflineGame extends Game implements Runnable {
                 var pointShipBoardState = shipByPoint.updateState();
 
                 if (pointShipBoardState == PointShipBoardState.WOUNDED) {
-                    pointBotHit = point;
-                    deltaList = Arrays.stream(BotDirectionShot.values())
-                            .peek(botDirectionShot -> {
-                                var delta = botDirectionShot.getDeltaArr();
-                                for (int i = 0; i < delta.length; i++) {
-                                    if (delta[i] > 0) {
-                                        delta[i] = 1;
-                                    } else if (delta[i] < 0) {
-                                        delta[i] = -1;
-                                    }
-                                }
-                            })
-                            .collect(Collectors.toList());
+                    botMove.pointBotHit = point;
+                    botMove.reset();
                 }
                 gameData.player1.board.fillUnavailableNeighbourPoints(shipByPoint, x, y);
             }
         } else {
-            y = pointBotHit.getY();
-            x = pointBotHit.getX();
-            var directionShot = deltaList.get(ThreadLocalRandom.current().nextInt(deltaList.size()));
-            y += directionShot.getY();
-            x += directionShot.getX();
+            x = botMove.pointBotHit.getX();
+            y = botMove.pointBotHit.getY();
+            var randomDirectionShot = botMove.getRandom();
+            x += randomDirectionShot.x;
+            y += randomDirectionShot.y;
 
             if (x < 0 || x >= Board.DEFAULT_X_SIZE
                     || y < 0 || y >= Board.DEFAULT_Y_SIZE
                     || (gameData.player1.board.getPoint(y, x).getPointShipBoardState() != PointShipBoardState.INIT
                     && gameData.player1.board.getPoint(y, x).getPointShipBoardState() != PointShipBoardState.HEALTHFUL)) {
-                deltaList.remove(directionShot);
+                botMove.SHOT_DIRECTIONS.remove(randomDirectionShot);
                 return;
             }
 
@@ -264,48 +282,38 @@ public class OfflineGame extends Game implements Runnable {
 
             if (shipByPoint == null) {
                 gameData.isPlayer1Move = true;
-                deltaList.remove(directionShot);
+                botMove.SHOT_DIRECTIONS.remove(randomDirectionShot);
 
                 if (gameData.player1.board.getStateOfPoint(x, y) == PointShipBoardState.INIT) {
                     gameData.player1.board.setStatePoint(x, y, PointShipBoardState.MISS);
                 }
             } else {
                 shipByPoint.damage(x, y);
-                shipByPoint.updateState();
+                var shipBoardState = shipByPoint.updateState();
                 gameData.player1.board.fillUnavailableNeighbourPoints(shipByPoint, x, y);
 
-                if (shipByPoint.getState() == PointShipBoardState.DESTROYED) {
-                    pointBotHit = null;
+                if (shipBoardState == PointShipBoardState.DESTROYED) {
+                    botMove.pointBotHit = null;
                     gameData.player2.shots++;
                     return;
                 }
 
-                directionShot.setPrevToSeccess();
-
-                switch (directionShot) {
-                    case LEFT:
-                        if (directionShot.isPrevSuccess())
-                            deltaList.removeAll(List.of(BotDirectionShot.UP, BotDirectionShot.DOWN));
-                        directionShot.getDeltaArr()[1] -= 1;
-                        break;
-                    case RIGHT:
-                        if (directionShot.isPrevSuccess())
-                            deltaList.removeAll(List.of(BotDirectionShot.UP, BotDirectionShot.DOWN));
-                        directionShot.getDeltaArr()[1] += 1;
-                        break;
-                    case UP:
-                        if (directionShot.isPrevSuccess())
-                            deltaList.removeAll(List.of(BotDirectionShot.LEFT, BotDirectionShot.RIGHT));
-                        directionShot.getDeltaArr()[0] -= 1;
-                        break;
-                    case DOWN:
-                        if (directionShot.isPrevSuccess())
-                            deltaList.removeAll(List.of(BotDirectionShot.LEFT, BotDirectionShot.RIGHT));
-                        directionShot.getDeltaArr()[0] += 1;
-                        break;
+                if (botMove.LEFT.equals(randomDirectionShot)) {
+                        botMove.SHOT_DIRECTIONS.removeAll(List.of(botMove.UP, botMove.DOWN));
+                    botMove.LEFT.x -= 1;
+                } else if (botMove.RIGHT.equals(randomDirectionShot)) {
+                        botMove.SHOT_DIRECTIONS.removeAll(List.of(botMove.UP, botMove.DOWN));
+                    botMove.RIGHT.x += 1;
+                } else if (botMove.UP.equals(randomDirectionShot)) {
+                        botMove.SHOT_DIRECTIONS.removeAll(List.of(botMove.LEFT, botMove.RIGHT));
+                    botMove.UP.y -= 1;
+                } else if (botMove.DOWN.equals(randomDirectionShot)) {
+                        botMove.SHOT_DIRECTIONS.removeAll(List.of(botMove.LEFT, botMove.RIGHT));
+                    botMove.DOWN.y += 1;
                 }
             }
         }
+
         gameData.player2.shots++;
         botMessageService.sendYouBoard(gameData.player1.dataUser.getUser().getChatId(),
                 gameData.player1.dataUser.getUser().getLocale(),
@@ -314,8 +322,7 @@ public class OfflineGame extends Game implements Runnable {
     }
 
     private void shooting() throws InterruptedException {
-        Board.Point pointBotHit = null;
-        List<BotDirectionShot> deltaList = null;
+        var botMove = new BotMove();
 
         while ((gameData.player1.ships = gameData.player1.board.getCountLiveShips()) != 0
                 && (gameData.player2.ships = gameData.player2.board.getCountLiveShips()) != 0
@@ -323,7 +330,7 @@ public class OfflineGame extends Game implements Runnable {
             if (gameData.isPlayer1Move) {
                 shotByPlayer();
             } else {
-                shotByBot(pointBotHit, deltaList);
+                shotByBot(botMove);
             }
         }
 
