@@ -116,8 +116,9 @@ public abstract class Game {
 
         if (gameData.player2.dataUser != null) {
             var userGamePlayer2 = UserGame.builder()
-                    .opponentId(gameData.player1.dataUser.getUser().getTelegramUserId())
+                    .userRecordId(gameData.player2.dataUser.getUser())
                     .isWin(!gameData.isWinPlayer1)
+                    .opponentId(gameData.player1.dataUser.getUser().getTelegramUserId())
                     .totalShots(gameData.player2.shots)
                     .scoresGame(gameData.player2.scores)
                     .build();
