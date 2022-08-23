@@ -35,7 +35,7 @@ import java.util.concurrent.TimeoutException;
 public class OnlineGame extends Game implements Runnable {
 
     public final static float GAME_SCORES_WIN_INTERRUPT_SCALE = 2.0F;
-    public final static short GAME_SCORES_WIN_INTERRUPT_MIN = 10;
+    public final static short GAME_SCORES_WIN_INTERRUPT_MIN = 5;
     private final static Update UPDATE_DUMMY = new Update();
     private final BotOnlineGameContext botOnlineGameContext;
     private Long interruptPlayer;
@@ -190,7 +190,9 @@ public class OnlineGame extends Game implements Runnable {
             if (!submits[submitIndex].isDone()) {
                 botMessageService.sendMessage(dataUser.getUser().getChatId(),
                         dataUser.getUser().getLocale(),
-                        BotMessages.PLAY_GAME_ONLINE_WAITING.getKey(), null);
+                        false,
+                        BotMessages.PLAY_GAME_ONLINE_WAITING,
+                        null);
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -349,7 +351,8 @@ public class OnlineGame extends Game implements Runnable {
             botMessageService.sendMessage(
                     playerData.dataUser.getUser().getChatId(),
                     playerData.dataUser.getUser().getLocale(),
-                    BotMessages.PLAY_GAME_MOVE_SKIP.getKey(),
+                    false,
+                    BotMessages.PLAY_GAME_MOVE_SKIP,
                     null,
                     MessageEmoji.TIME_IS_UP.getCodeUnits());
             gameData.isPlayer1Move = !isPlayer1;
@@ -420,7 +423,10 @@ public class OnlineGame extends Game implements Runnable {
 
         if (gameScoresWinner == 0) {
             gameScoresWinner = GAME_SCORES_WIN_INTERRUPT_MIN;
-            gameScoresInterrupter = GAME_SCORES_WIN_INTERRUPT_MIN - 1;
+
+            if (gameScoresInterrupter >= gameScoresWinner) {
+                gameScoresInterrupter = GAME_SCORES_WIN_INTERRUPT_MIN - 1;
+            }
         }
 
         var userGameWinner = UserGame.builder()
