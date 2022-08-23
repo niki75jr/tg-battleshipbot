@@ -146,14 +146,11 @@ public class BotMessageServiceImpl implements BotMessageService {
 
     @SneakyThrows
     @Override
-    public void sendMessage(final Long chatId, final Locale locale,
-                            final String messageKey, final ReplyKeyboard replyKeyboard, final Object... placeHolders) {
-        var messageText = messageSource.getMessage(messageKey, placeHolders, locale);
+    public void sendMessage(final Long chatId, final String messageText) {
         bot.execute(
                 SendMessage.builder()
                         .chatId(chatId)
                         .text(messageText)
-                        .replyMarkup(replyKeyboard)
                         .build()
         );
     }
