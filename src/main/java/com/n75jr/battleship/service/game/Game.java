@@ -19,41 +19,6 @@ import java.util.regex.Pattern;
 @Log4j2
 public abstract class Game {
 
-    public enum BotDirectionShot {
-        LEFT(0, -1),
-        UP(-1, 0),
-        RIGHT(0, 1),
-        DOWN(1, 0);
-
-        private final int[] deltaArr;
-        private boolean isPrevSuccess;
-
-        BotDirectionShot(int... delta) {
-            this.deltaArr = delta;
-            isPrevSuccess = false;
-        }
-
-        public void setPrevToSeccess() {
-            isPrevSuccess = true;
-        }
-
-        public boolean isPrevSuccess() {
-            return isPrevSuccess;
-        }
-
-        public int[] getDeltaArr() {
-            return deltaArr;
-        }
-
-        public int getY() {
-            return deltaArr[0];
-        }
-
-        public int getX() {
-            return deltaArr[1];
-        }
-    }
-
     public final static long DEFAULT_PLACEMENT_DELAY = 30_000L;
     public final static long DEFAULT_MOVE_DELAY = 30_000L;
     public final static short GAME_SCORES_WIN = 20;
